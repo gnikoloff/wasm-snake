@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <style>
+    body {
+      margin: 0;
+    }
+
+    #app {
+      margin: 1rem;
+      font-family: monospace;
+    }
+
+    #score {
+      font-size: 2rem;
+    }
+
+    #c {
+      width: calc(100% - 2rem);
+      max-width: 768px;
+      image-rendering: pixelated;
+      border: 2px solid black;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <div id="gl-container"></div>
+    <div id="score">42</div>
+  </div>
+  <script type="module" src="src/index.ts"></script>
+</body>
+
+</html>
