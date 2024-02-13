@@ -4,6 +4,8 @@
   "description": "Snake written in pure WASM",
   "main": "index.js",
   "scripts": {
+    "dev:wasm": "wat2wasm src/snake.wat -o src/snake.wasm --debug-names",
+    "build:wasm": "wat2wasm src/snake.wat -o src/snake.wasm",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
