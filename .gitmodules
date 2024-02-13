@@ -1,0 +1,3 @@
+[submodule "src/lib/hwoa-rang-gl2"]
+	path = src/lib/hwoa-rang-gl2
+	url = git@github.com:gnikoloff/hwoa-rang-gl2.git
