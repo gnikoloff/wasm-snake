@@ -1,13 +1,42 @@
 (module
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;;
+  ;; Classic Snake in WebAssembly text format
+  ;;
+  ;; Memory layout:
+  ;;
+  ;; One virtual page in WASM is 64kb. We will need 3 pages to hold all of the data (pixel buffer + game state).
+  ;; 64kb * 3 pages = 192kb =
+  ;; 
+  ;; 196608 bytes for the entire program
+  ;;  __________________________________________________________________________________________
+  ;; | Offset:                           |                             |                       |
+  ;; | 0 bytes                           | 140000 bytes                | 14200 bytes           |
+  ;; |-----------------------------------|-----------------------------|-----------------------|
+  ;; | VRAM (pixel buffer contents)      | Snake part positions (XY)   | Snake parts counter   |
+  ;; | 256 * 128 = 32768 pixels          | Max parts allowed = 100     | 4 byte i32            |
+  ;; | 4 bytes per pixel = 131072 bytes  | 2 bytes for XY = 200 bytes  |                       |
+  ;; |___________________________________|_____________________________|_______________________|
+  ;; 
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
   ;; preallocate 3 pages of VM
   ;; one page is 64kb
   ;; so total memory = 192kb
   (memory 3)
+  ;; make the memory visible to JS
   (export "memory" (memory 0))
 
-  (global $screenWidth (mut i32) (i32.const 0))
-  (global $screenHeight (mut i32) (i32.const 0))
-  (global $vramSizeBytes (mut i32) (i32.const 0))
+  ;; global vars
+  (global $screenWidth i32 (i32.const 256))
+  (global $screenHeight i32 (i32.const 128))
+  (global $vramSizeBytes i32 (i32.const 32768))        ;; screenWidth * screenHeight
+  (global $snakeXYsByteOffset i32 (i32.const 140000))
+  (global $snakePartCount (mut i32) (i32.const 0))
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; drawing utilities
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
   (func $putPixelAtIdx (param $idx i32) (param $color i32)
     local.get $idx
@@ -41,9 +70,8 @@
       local.get $i
       i32.const 1
       i32.sub
-      local.set $i
+      local.tee $i
 
-      local.get $i
       i32.const -1
       i32.ne
       (br_if $clearBgLoop)
@@ -69,16 +97,14 @@
     local.get $centerX
     local.get $halfSize
     i32.sub
-    local.set $xStart
-    local.get $xStart
+    local.tee $xStart
     local.set $x
 
     ;; calc y
     local.get $centerY
     local.get $halfSize
     i32.sub
-    local.set $yStart
-    local.get $yStart
+    local.tee $yStart
     local.set $y
 
     ;; calc xEnd
@@ -105,6 +131,7 @@
         i32.add
         local.set $y
 
+        ;; draw pixel within block
         local.get $x
         local.get $y
         i32.const 255
@@ -126,26 +153,60 @@
     )
   )
 
-  (func $main
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; game helpers
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  (func $allocateSnakeBlock (param $x i32) (param $y i32)
+    (local $blockOffsetBytes i32)
+    global.get $snakePartCount
+    i32.const 2 ;; 2 for XY
+    i32.mul
+    i32.const 4 ;; 4 bytes per i32
+    i32.mul
+    global.get $snakeXYsByteOffset
+    i32.add
+    local.tee $blockOffsetBytes
+
+    local.get $x
+    i32.store ;; store X
+
+    local.get $blockOffsetBytes
+    i32.const 4
+    i32.add
+    local.get $y
+    i32.store ;; store y
     
+    ;; increment snakePartCount
+    global.get $snakePartCount
+    i32.const 1
+    i32.add
+    global.set $snakePartCount
+  )
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; main
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  (func $main
     (local $snakeX i32)
     (local $snakeY i32)
     (local $x i32)
     (local $y i32)
     (local $isSnakeX i32)
     (local $isSnakeY i32)
+    (local $snakeBlockCount i32)
 
-    ;; Initialize global vars
-    i32.const 256
-    global.set $screenWidth
+    i32.const 100
+    i32.const 100
+    call $allocateSnakeBlock
 
-    i32.const 128
-    global.set $screenHeight
+    i32.const 106
+    i32.const 100
+    call $allocateSnakeBlock
 
-    global.get $screenWidth
-    global.get $screenHeight
-    i32.mul
-    global.set $vramSizeBytes
+    i32.const 112
+    i32.const 100
+    call $allocateSnakeBlock
 
     global.get $vramSizeBytes
     i32.const 4
@@ -187,53 +248,22 @@
     i32.const 10
     call $drawSnakeBlock
 
-    ;; (loop $my_loop
-      
-    ;;   local.get $var
-    ;;   i32.const 256
-    ;;   i32.rem_u
-    ;;   local.set $x
-
-    ;;   local.get $var
-    ;;   i32.const 256
-    ;;   i32.div_u
-    ;;   local.set $y
-
-    ;;   local.get $x
-    ;;   local.get $snakeX
-    ;;   i32.eq
-    ;;   local.set $isSnakeX
-
-    ;;   local.get $y
-    ;;   local.get $snakeY
-    ;;   i32.eq
-    ;;   local.set $isSnakeY
-
-    ;;   local.get $isSnakeX
-    ;;   local.get $isSnakeY
-    ;;   i32.and
-    ;;   (if
-    ;;     (then
-    ;;       local.get $x
-    ;;       local.get $y
-    ;;       i32.const 200
-    ;;       call $putPixelAtXY
-    ;;     )
-    ;;     (else
-    ;;       local.get $x
-    ;;       local.get $y
-    ;;       i32.const 30
-    ;;       call $putPixelAtXY
-    ;;     )
-    ;;   )
-
-    ;;   local.get $var
-    ;;   i32.const 1
-    ;;   i32.sub
-    ;;   local.set $var
-
-      
-    ;; )
+    i32.const 112
+    i32.const 106
+    i32.const 10
+    call $drawSnakeBlock
+    i32.const 112
+    i32.const 112
+    i32.const 10
+    call $drawSnakeBlock
+    i32.const 118
+    i32.const 112
+    i32.const 10
+    call $drawSnakeBlock
+    i32.const 124
+    i32.const 112
+    i32.const 10
+    call $drawSnakeBlock
   )
   (start $main)
 )
