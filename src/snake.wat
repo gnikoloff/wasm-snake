@@ -19,21 +19,27 @@
   ;; |___________________________________|_____________________________|_______________________|
   ;; 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-  ;; preallocate 3 pages of VM
-  ;; one page is 64kb
-  ;; so total memory = 192kb
   (memory 3)
-  ;; make the memory visible to JS
-  (export "memory" (memory 0))
 
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; global vars
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   (global $screenWidth i32 (i32.const 256))
   (global $screenHeight i32 (i32.const 128))
   (global $vramSizeBytes i32 (i32.const 32768))        ;; screenWidth * screenHeight
+  
+  (global $snakeBlockSize i32 (i32.const 10))
   (global $snakeXYsByteOffset i32 (i32.const 140000))
   (global $snakePartCount (mut i32) (i32.const 0))
   (global $snakeMaxPartsCount i32 (i32.const 100))
+  (global $snakeMoveState (mut i32) (i32.const 0))     ;; 0 - top ;; 1 - right ;; 2 - bottom ;; 3 - left ;;
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; exports (visible from JS)
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  (export "memory" (memory 0))
+  (export "updateFrame" (func $updateFrame))
+  (export "setSnakeMovementState" (func $setSnakeMovementState))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; drawing utilities
@@ -157,13 +163,15 @@
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; game helpers
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  (func $setSnakeMovementState (param $state i32)
+    local.get $state
+    global.set $snakeMoveState
+  )
 
   (func $allocateSnakeBlock (param $x i32) (param $y i32)
     (local $blockOffsetBytes i32)
     global.get $snakePartCount
-    i32.const 2 ;; 2 for XY
-    i32.mul
-    i32.const 4 ;; 4 bytes per i32
+    i32.const 8 ;; 2 for XY * 4 bytes per i32
     i32.mul
     global.get $snakeXYsByteOffset
     i32.add
@@ -183,6 +191,26 @@
     i32.const 1
     i32.add
     global.set $snakePartCount
+  )
+
+  (func $getSnakeBlockPosXY (param $blockIdx i32) (result i32) (result i32)
+    (local $xByteOffset i32)
+    (local $yByteOffset i32)
+    local.get $blockIdx
+    i32.const 8 ;; (XY) * 4 bytes per i32
+    i32.mul
+    global.get $snakeXYsByteOffset
+    i32.add
+    local.tee $xByteOffset
+
+    i32.const 4
+    i32.add
+    local.set $yByteOffset
+
+    local.get $xByteOffset
+    i32.load
+    local.get $yByteOffset
+    i32.load
   )
 
   (func $drawSnake
@@ -214,7 +242,7 @@
 
       local.get $snakeX
       local.get $snakeY
-      i32.const 10
+      global.get $snakeBlockSize
       call $drawSnakeBlock
 
       local.get $partIdx
@@ -227,16 +255,180 @@
     )
   )
 
+  (func $moveSnake (param )
+    (local $x i32)
+    (local $y i32)
+    (local $isPositiveX i32)
+    (local $isNegativeX i32)
+    (local $isPositiveY i32)
+    (local $isNegativeY i32)
+
+    ;; get correct x and y positions
+    i32.const 0
+    call $getSnakeBlockPosXY
+    local.set $y
+    local.set $x
+
+    ;; determine right movement based on $snakeMoveState
+    global.get $snakeMoveState
+    i32.const 1
+    i32.eq
+    local.set $isPositiveX
+
+    global.get $snakeMoveState
+    i32.const 3
+    i32.eq
+
+    ;; handle horizontal movement
+    local.tee $isNegativeX    
+    local.get $isPositiveX
+    i32.or
+    (if
+      (then
+        local.get $isPositiveX
+        i32.const 1
+        i32.and
+        (if
+          (then       
+            local.get $x
+            i32.const 6
+            i32.add
+            local.set $x
+          )
+          (else
+            local.get $x
+            i32.const 6
+            i32.sub
+            local.set $x
+          )
+        )
+        ;; test right border
+        local.get $x
+        i32.const 5
+        i32.add
+        global.get $screenWidth
+        i32.ge_u
+        (if
+          ;; wrap around to left border
+          (then
+            i32.const 5
+            local.set $x
+          )
+        )
+
+        ;; test left border
+        local.get $x
+        i32.const 5
+        i32.sub
+        i32.const 0
+        i32.le_u
+        (if
+          ;; wrap around to right border
+          (then
+            global.get $screenWidth
+            i32.const 5
+            i32.sub
+            local.set $x
+          )
+        )
+
+        global.get $snakeXYsByteOffset
+        local.get $x
+        i32.store
+      ) 
+    )
+
+    ;; handle vertical movement
+    global.get $snakeMoveState
+    i32.const 2
+    i32.eq
+    local.set $isPositiveY
+
+    global.get $snakeMoveState
+    i32.eqz
+    local.tee $isNegativeY
+
+    local.get $isPositiveY
+    i32.or
+    (if
+      (then
+        local.get $isPositiveY
+        i32.const 1
+        i32.and
+        (if
+          (then
+            local.get $y
+            i32.const 6
+            i32.add
+            local.set $y
+          )
+          (else
+            local.get $y
+            i32.const 6
+            i32.sub
+            local.set $y
+          )
+        )
+
+        ;; test bottom border
+        local.get $y
+        i32.const 5
+        i32.add
+        global.get $screenHeight
+        i32.ge_u
+        (if
+          ;; wrap around to left border
+          (then
+            i32.const 5
+            local.set $y
+          )
+        )
+
+        ;; test top border
+        local.get $y
+        i32.const 5
+        i32.sub
+        i32.const 0
+        i32.le_u
+        (if
+          ;; wrap around to right border
+          (then
+            global.get $screenHeight
+            i32.const 5
+            i32.sub
+            local.set $y
+          )
+        )
+
+        global.get $snakeXYsByteOffset
+        i32.const 4
+        i32.add
+        local.get $y
+        i32.store
+      )
+    )
+
+    ;; i32.const 4
+    ;; i32.add
+    ;; i32.load
+    ;; local.set $y
+
+    ;; i32.const 8 ;; 2 for XY * 4 bytes per i32
+    ;; i32.mul
+  )
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  ;; main
+  ;; Program start / update loop
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  (export "updateFrame" (func $updateFrame))
   (func $updateFrame
+    call $moveSnake
+
     call $clearBackground
     call $drawSnake
   )
 
   (func $main
+    ;; init 4 snake blocks laid out horizontally on app startup
     i32.const 112
     i32.const 100
     call $allocateSnakeBlock
@@ -248,9 +440,8 @@
     i32.const 124
     i32.const 100
     call $allocateSnakeBlock
-
-    i32.const 124
-    i32.const 106
+    i32.const 130
+    i32.const 100
     call $allocateSnakeBlock
   )
   (start $main)
