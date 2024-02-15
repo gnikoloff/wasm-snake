@@ -33,6 +33,7 @@
   (global $vramSizeBytes i32 (i32.const 32768))        ;; screenWidth * screenHeight
   (global $snakeXYsByteOffset i32 (i32.const 140000))
   (global $snakePartCount (mut i32) (i32.const 0))
+  (global $snakeMaxPartsCount i32 (i32.const 100))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; drawing utilities
@@ -184,86 +185,73 @@
     global.set $snakePartCount
   )
 
+  (func $drawSnake
+    (local $partIdx i32)
+    (local $snakeX i32)
+    (local $snakeY i32)
+
+    i32.const 0
+    local.set $partIdx
+    
+    (loop $drawSnakeLoop
+      local.get $partIdx
+      i32.const 8
+      i32.mul
+      global.get $snakeXYsByteOffset
+      i32.add
+      i32.load
+      local.set $snakeX
+
+      local.get $partIdx
+      i32.const 8
+      i32.mul
+      global.get $snakeXYsByteOffset
+      i32.add
+      i32.const 4
+      i32.add
+      i32.load
+      local.set $snakeY
+
+      local.get $snakeX
+      local.get $snakeY
+      i32.const 10
+      call $drawSnakeBlock
+
+      local.get $partIdx
+      i32.const 1
+      i32.add
+      local.tee $partIdx
+      global.get $snakePartCount
+      i32.ne
+      (br_if $drawSnakeLoop)
+    )
+  )
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; main
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  (func $main
-    (local $snakeX i32)
-    (local $snakeY i32)
-    (local $x i32)
-    (local $y i32)
-    (local $isSnakeX i32)
-    (local $isSnakeY i32)
-    (local $snakeBlockCount i32)
-
-    i32.const 100
-    i32.const 100
-    call $allocateSnakeBlock
-
-    i32.const 106
-    i32.const 100
-    call $allocateSnakeBlock
-
-    i32.const 112
-    i32.const 100
-    call $allocateSnakeBlock
-
-    global.get $vramSizeBytes
-    i32.const 4
-    i32.add
-    i32.const 200
-    i32.store 
-
-    global.get $vramSizeBytes
-    i32.const 8
-    i32.add
-    i32.const 100
-    i32.store
-    
-    global.get $vramSizeBytes
-    i32.const 4
-    i32.add
-    i32.load
-    local.set $snakeX
-
-    global.get $vramSizeBytes
-    i32.const 8
-    i32.add
-    i32.load
-    local.set $snakeY
-
+  (export "updateFrame" (func $updateFrame))
+  (func $updateFrame
     call $clearBackground
-    
-    i32.const 100
-    i32.const 100
-    i32.const 10
-    call $drawSnakeBlock
+    call $drawSnake
+  )
 
-    i32.const 106
-    i32.const 100
-    i32.const 10
-    call $drawSnakeBlock
+  (func $main
     i32.const 112
     i32.const 100
-    i32.const 10
-    call $drawSnakeBlock
+    call $allocateSnakeBlock
 
-    i32.const 112
-    i32.const 106
-    i32.const 10
-    call $drawSnakeBlock
-    i32.const 112
-    i32.const 112
-    i32.const 10
-    call $drawSnakeBlock
     i32.const 118
-    i32.const 112
-    i32.const 10
-    call $drawSnakeBlock
+    i32.const 100
+    call $allocateSnakeBlock
+
     i32.const 124
-    i32.const 112
-    i32.const 10
-    call $drawSnakeBlock
+    i32.const 100
+    call $allocateSnakeBlock
+
+    i32.const 124
+    i32.const 106
+    call $allocateSnakeBlock
   )
   (start $main)
 )
