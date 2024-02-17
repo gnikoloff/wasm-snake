@@ -1,6 +1,6 @@
 import snakeWasmURL from "./snake.wasm?url";
 import { createPlane, createProgram } from "./lib/hwoa-rang-gl2";
-import { CHAR_BYTES } from "./constants";
+import { CHAR_DATA } from "./constants";
 
 interface IWebAssemblyExport {
 	memory: {
@@ -13,10 +13,8 @@ interface IWebAssemblyExport {
 type SnakeMoveState = 0 | 1 | 2 | 3; // 0 - Up // 1 - Right // 2 - Bottom // 3 - Left
 
 const CANVAS_WIDTH = 256;
-const CANVAS_HEIGHT = 128;
+const CANVAS_HEIGHT = 144;
 const FPS = 10;
-// refer to the table in snake.wat
-const CHARS_BYTE_OFFSET = 140200;
 
 let snakeState: SnakeMoveState = 0;
 
@@ -39,9 +37,9 @@ const { module, instance } = await WebAssembly.instantiateStreaming(
 const exports = instance.exports as unknown as IWebAssemblyExport;
 const memoryAsInt32 = new Int32Array(exports.memory.buffer);
 
-for (let i = 0; i < 1; i++) {
-	for (let n = 0; n < 256; n++) {
-		memoryAsInt32[35100 + i * 256 + n] = CHAR_BYTES[i][n];
+for (let i = 0; i < CHAR_DATA.length; i++) {
+	for (let n = 0; n < 64; n++) {
+		memoryAsInt32[37500 + i * 64 + n] = CHAR_DATA[i][n];
 	}
 }
 
@@ -128,19 +126,22 @@ gl.uniform1i(uTexture, 0);
 ////////////////////////////////////////////////////////////////////////
 exports.setSnakeMovementState(snakeState);
 document.body.addEventListener("keydown", (e) => {
-	e.preventDefault();
 	let newState: SnakeMoveState;
 	switch (e.key) {
 		case "ArrowUp":
+			e.preventDefault();
 			newState = 0;
 			break;
 		case "ArrowRight":
+			e.preventDefault();
 			newState = 1;
 			break;
 		case "ArrowDown":
+			e.preventDefault();
 			newState = 2;
 			break;
 		case "ArrowLeft":
+			e.preventDefault();
 			newState = 3;
 			break;
 		default:

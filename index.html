@@ -7,6 +7,10 @@
       margin: 0;
     }
 
+    p {
+      font-size: 16px;
+    }
+
     #app {
       margin: 1rem;
       font-family: monospace;
@@ -23,6 +27,7 @@
       border: 2px solid black;
     }
   </style>
+  <title>WASM Snake</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
@@ -31,7 +36,11 @@
 <body>
   <div id="app">
     <div id="gl-container"></div>
-    <div id="score">42</div>
+    <main>
+      <h1>Classic Snake in WebAssembly</h1>
+      <p>Source code on <a href="https://github.com/gnikoloff/wasm-snake">Github</a>. Made by <a
+          href="https://georgi-nikolov.com">Georgi Nikolov</a>.</p>
+    </main>
   </div>
   <script type="module" src="src/index.ts"></script>
 </body>
