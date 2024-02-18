@@ -7,15 +7,15 @@
   ;;
   ;; One virtual page in WASM is 64kb. We will need 3 pages to hold all of the data (pixel buffer + game state).
   ;; 64kb * 3 pages = 192kb = 196608 bytes for the entire program
-  ;;  ___________________________________________________________________________
-  ;; | Offset:                           |                                      |
-  ;; | index 0                           | index 37500                          |
-  ;; | byte index 0                      | byte index 150000                    |
-  ;; |-----------------------------------|--------------------------------------|
-  ;; | VRAM (pixel buffer contents)      | Char encodings (64 pixels per char)  |
-  ;; | 256 * 144 = 36864 pixels          | Chars: 0123456789                    |
-  ;; | 4 bytes per pixel = 147456 bytes  | 64 * 10 chars * 4 bytes = 2560 bytes |
-  ;; |___________________________________|______________________________________|
+  ;;  _____________________________________________________________________________________________________________________________________
+  ;; | Offset:                                   |                                      |                                                 |
+  ;; | index 0                                   | index 37500                          | index 40000                                     |
+  ;; | byte index 0                              | byte index 150000                    | byte index 160000                               |
+  ;; |-------------------------------------------|--------------------------------------|-------------------------------------------------|
+  ;; | VRAM (pixel buffer contents)              | Char encodings (64 pixels per char)  | Snake parts positions (max 300)                 |
+  ;; | 256px width * 144 pxheight = 36864 pixels | Chars: 0123456789                    | Each position has 2 coords (XY)                 |
+  ;; | 4 bytes per pixel = 147456 bytes          | 64 * 10 chars * 4 bytes = 2560 bytes | 300 positions * 2 coords * 4 bytes = 2400 bytes |
+  ;; |___________________________________________|______________________________________|_________________________________________________|
   ;; 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   (memory 3)
@@ -33,6 +33,8 @@
   (global $leftPadding i32 (i32.const 4))
   
   (global $snakeMoveState (mut i32) (i32.const 0))     ;; 0 - top ;; 1 - right ;; 2 - bottom ;; 3 - left ;;
+  (global $snakePositionCounter (mut i32) (i32.const 0))
+  (global $snakePositionsByteOffset i32 (i32.const 160000))
 
   (global $charsByteOffset i32 (i32.const 150000))
   (global $charWidth i32 (i32.const 8))
@@ -47,11 +49,11 @@
   (export "memory" (memory 0))
   (export "updateFrame" (func $updateFrame))
   (export "setSnakeMovementState" (func $setSnakeMovementState))
+  (export "setCharDataAtIdx" (func $setCharDataAtIdx))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; drawing utilities
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
   (func $putPixelAtIdx (param $idx i32) (param $color i32)
     local.get $idx
     i32.const 4 ;; 4 bytes per i32
@@ -157,15 +159,75 @@
     i32.eq
     (if
       (then
-        local.get $xStart
-        i32.const 3
-        i32.add
-        local.set $eyeX
 
-        local.get $yStart
-        i32.const 4
-        i32.add
-        local.set $eyeY
+        global.get $snakeMoveState
+        i32.eqz ;; up
+        (if
+          (then
+            local.get $xStart
+            i32.const 3
+            i32.add
+            local.set $eyeX
+
+            local.get $yStart
+            i32.const 3
+            i32.add
+            local.set $eyeY
+          )
+        )
+
+        global.get $snakeMoveState
+        i32.const 1
+        i32.eq ;; right
+        (if
+          (then
+            local.get $xStart
+            i32.const 6
+            i32.add
+            local.set $eyeX
+
+            local.get $yStart
+            i32.const 3
+            i32.add
+            local.set $eyeY
+          )
+        )
+
+        global.get $snakeMoveState
+        i32.const 2
+        i32.eq ;; bottom
+        (if
+          (then
+            local.get $xStart
+            i32.const 3
+            i32.add
+            local.set $eyeX
+
+            local.get $yStart
+            i32.const 6
+            i32.add
+            local.set $eyeY
+          )
+        )
+
+        global.get $snakeMoveState
+        i32.const 3
+        i32.eq ;; left
+        (if
+          (then
+            local.get $xStart
+            i32.const 3
+            i32.add
+            local.set $eyeX
+
+            local.get $yStart
+            i32.const 3
+            i32.add
+            local.set $eyeY
+          )
+        )
+
+        
 
         local.get $eyeX
         local.get $eyeY
@@ -223,10 +285,17 @@
       i32.add
       local.set $charPixelWorldY
 
-      local.get $charPixelWorldX
-      local.get $charPixelWorldY
       local.get $charByte
-      call $putPixelAtXY
+      i32.const 0
+      i32.ne
+      (if
+        (then
+          local.get $charPixelWorldX
+          local.get $charPixelWorldY
+          local.get $charByte
+          call $putPixelAtXY 
+        )
+      )
 
       local.get $loopIdx
       i32.const 1
@@ -472,6 +541,52 @@
     
   )
 
+  (func $drawSnake
+    (local $partIdx i32)
+    (local $partByteOffset i32)
+    (local $partX i32)
+    (local $partY i32)
+    (local $isHead i32)
+
+    i32.const 0
+    local.set $partIdx
+
+    (loop $drawSnakeBlocksLoop
+
+      local.get $partIdx
+      i32.eqz
+      local.set $isHead
+
+      local.get $partIdx
+      i32.const 8
+      i32.mul
+      global.get $snakePositionsByteOffset
+      i32.add
+      local.tee $partByteOffset
+      i32.load
+      local.set $partX
+
+      local.get $partByteOffset
+      i32.const 4
+      i32.add
+      i32.load
+      local.set $partY
+      
+      local.get $partX
+      local.get $partY
+      local.get $isHead
+      call $drawSnakeBlock
+
+      local.get $partIdx
+      i32.const 1
+      i32.add
+      local.tee $partIdx
+      global.get $snakePositionCounter
+      i32.ne
+      (br_if $drawSnakeBlocksLoop)
+    )
+  )
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; game helpers
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -480,30 +595,156 @@
     global.set $snakeMoveState
   )
 
+  (func $setCharDataAtIdx (param $idx i32) (param $color i32)
+    local.get $idx
+    i32.const 4
+    i32.mul
+    global.get $charsByteOffset
+    i32.add
+    local.get $color
+    i32.store
+  )
+
+  (func $addSnakeBlock (param $idx i32) (param $x i32) (param $y i32)
+    (local $blockByteOffset i32)
+    local.get $idx
+    i32.const 8
+    i32.mul
+    global.get $snakePositionsByteOffset
+    i32.add
+    local.tee $blockByteOffset
+    local.get $x
+    i32.store ;; store x at idx
+
+    local.get $blockByteOffset
+    i32.const 4
+    i32.add
+    local.get $y
+    i32.store ;; store y at idx + 1
+
+    global.get $snakePositionCounter
+    i32.const 1
+    i32.add
+    global.set $snakePositionCounter
+  )
+
+  (func $moveSnake
+    (local $headX i32)
+    (local $headY i32)
+    (local $newHeadX i32)
+    (local $newHeadY i32)
+
+    global.get $snakePositionsByteOffset
+    i32.load
+    local.set $headX
+
+    global.get $snakePositionsByteOffset
+    i32.const 4
+    i32.add
+    i32.load
+    local.set $headY
+
+    global.get $snakeMoveState
+    i32.eqz ;; up
+    (if
+      (then
+        local.get $headY
+        i32.const 8
+        i32.sub
+        local.set $newHeadY
+
+        global.get $snakePositionsByteOffset
+        i32.const 4
+        i32.add
+        local.get $newHeadY
+        i32.store
+      )
+    )
+
+    global.get $snakeMoveState
+    i32.const 1
+    i32.eq ;; right
+    (if
+      (then
+        local.get $headX
+        i32.const 8
+        i32.add
+        local.set $newHeadX
+
+        global.get $snakePositionsByteOffset
+        local.get $newHeadX
+        i32.store
+      )
+    )
+
+    global.get $snakeMoveState
+    i32.const 2
+    i32.eq ;; bottom
+    (if
+      (then
+        local.get $headY
+        i32.const 8
+        i32.add
+        local.set $newHeadY
+
+        global.get $snakePositionsByteOffset
+        i32.const 4
+        i32.add
+        local.get $newHeadY
+        i32.store
+      )
+    )
+
+    global.get $snakeMoveState
+    i32.const 3
+    i32.eq ;; left
+    (if
+      (then
+        local.get $headX
+        i32.const 8
+        i32.sub
+        local.set $newHeadX
+
+        global.get $snakePositionsByteOffset
+        local.get $newHeadX
+        i32.store
+      )
+    )
+
+  )
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Program start / update loop
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   (func $updateFrame
-    ;; call $moveSnake
+    call $moveSnake
 
     call $clearBackground
     call $drawDebugGrid
     call $drawBorder
     call $drawScore
-
-    i32.const 112
-    i32.const 112
-    i32.const 1
-    call $drawSnakeBlock
+    call $drawSnake
 
     global.get $score
     i32.const 1
     i32.add
     global.set $score
   )
-
   (func $main
-    
+    i32.const 2
+    i32.const 24
+    i32.const 40
+    call $addSnakeBlock
+
+    i32.const 1
+    i32.const 32
+    i32.const 40
+    call $addSnakeBlock
+
+    i32.const 0
+    i32.const 40
+    i32.const 40
+    call $addSnakeBlock
   )
   (start $main)
 )

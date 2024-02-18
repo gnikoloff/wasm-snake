@@ -8,15 +8,16 @@ interface IWebAssemblyExport {
 	};
 	updateFrame: () => void;
 	setSnakeMovementState: (state: SnakeMoveState) => void;
+	setCharDataAtIdx: (idx: number, color: number) => void;
 }
 
 type SnakeMoveState = 0 | 1 | 2 | 3; // 0 - Up // 1 - Right // 2 - Bottom // 3 - Left
 
 const CANVAS_WIDTH = 256;
 const CANVAS_HEIGHT = 144;
-const FPS = 10;
+const FPS = 4;
 
-let snakeState: SnakeMoveState = 0;
+let snakeState: SnakeMoveState = 1;
 
 // Init canvas
 const $glContiner = document.getElementById("gl-container")!;
@@ -39,7 +40,7 @@ const memoryAsInt32 = new Int32Array(exports.memory.buffer);
 
 for (let i = 0; i < CHAR_DATA.length; i++) {
 	for (let n = 0; n < 64; n++) {
-		memoryAsInt32[37500 + i * 64 + n] = CHAR_DATA[i][n];
+		exports.setCharDataAtIdx(i * 64 + n, CHAR_DATA[i][n]);
 	}
 }
 
