@@ -42,6 +42,8 @@
   (global $charByteSize i32 (i32.const 256))
 
   (global $score (mut i32) (i32.const 0))
+  (global $frameCounter (mut i32) (i32.const 0))
+  (global $foodColorState (mut i32) (i32.const 0))
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; exports (visible from JS)
@@ -538,6 +540,295 @@
   )
 
   (func $drawFood (param $x i32) (param $y i32)
+    ;; (local $xBlockStart i32)
+    (local $yBlockStart i32)
+    (local $xBlockEnd i32)
+    (local $yBlockEnd i32)
+    (local $xStart i32)
+    (local $yStart i32)
+    (local $topColor i32)
+    (local $rightColor i32)
+    (local $bottomColor i32)
+    (local $leftColor i32)
+
+    global.get $frameCounter
+    i32.const 5
+    i32.rem_u
+    (if
+      (then)
+      (else
+        global.get $foodColorState
+        i32.const 1
+        i32.add
+        global.set $foodColorState
+        global.get $foodColorState
+        i32.const 4
+        i32.eq
+        (if
+          (then
+            i32.const 0
+            global.set $foodColorState
+          )
+        )
+      )
+    )
+
+    global.get $foodColorState
+    i32.eqz
+    (if
+      (then
+        i32.const 200
+        local.set $topColor
+        i32.const 150
+        local.set $rightColor
+        i32.const 100
+        local.set $bottomColor
+        i32.const 75
+        local.set $leftColor
+      )
+    )
+
+    global.get $foodColorState
+    i32.const 1
+    i32.eq
+    (if
+      (then
+        i32.const 75
+        local.set $topColor
+        i32.const 200
+        local.set $rightColor
+        i32.const 150
+        local.set $bottomColor
+        i32.const 100
+        local.set $leftColor
+      )
+    )
+
+    global.get $foodColorState
+    i32.const 2
+    i32.eq
+    (if
+      (then
+        i32.const 100
+        local.set $topColor
+        i32.const 75
+        local.set $rightColor
+        i32.const 200
+        local.set $bottomColor
+        i32.const 150
+        local.set $leftColor
+      )
+    )
+
+    global.get $foodColorState
+    i32.const 3
+    i32.eq
+    (if
+      (then
+        i32.const 150
+        local.set $topColor
+        i32.const 100
+        local.set $rightColor
+        i32.const 75
+        local.set $bottomColor
+        i32.const 200
+        local.set $leftColor
+      )
+    )
+
+    local.get $x
+    local.tee $xStart
+    i32.const 3
+    i32.add
+    ;; local.tee $xBlockStart
+    local.tee $x
+    i32.const 3
+    i32.add
+    local.set $xBlockEnd
+
+    local.get $y
+    i32.const 1
+    i32.add
+    local.tee $yStart
+    local.tee $yBlockStart
+    i32.const 2
+    i32.add
+    local.set $yBlockEnd
+
+    ;; draw top block
+    (loop $topBlockLoopX
+      local.get $yBlockStart
+      local.set $y
+      (loop $topBlockLoopY
+        local.get $x
+        local.get $y
+        local.get $topColor
+        call $putPixelAtXY
+
+        local.get $y
+        i32.const 1
+        i32.add
+        local.tee $y
+        local.get $yBlockEnd
+        i32.ne
+        (br_if $topBlockLoopY)
+      )
+    
+      local.get $x
+      i32.const 1
+      i32.add
+      local.tee $x
+      local.get $xBlockEnd
+      i32.ne
+      (br_if $topBlockLoopX)
+    )
+
+    ;; draw right block
+    local.get $xStart
+    i32.const 6
+    i32.add
+    local.set $x
+
+    local.get $xStart
+    i32.const 8
+    i32.add
+    local.set $xBlockEnd
+
+    local.get $yStart
+    i32.const 2
+    i32.add
+    local.tee $y
+    local.set $yBlockStart
+
+    local.get $yStart
+    i32.const 5
+    i32.add
+    local.set $yBlockEnd
+
+    (loop $rightBlockLoopX
+      local.get $yBlockStart
+      local.set $y
+      (loop $rightBlockLoopY
+        local.get $x
+        local.get $y
+        local.get $rightColor
+        call $putPixelAtXY
+
+        local.get $y
+        i32.const 1
+        i32.add
+        local.tee $y
+        local.get $yBlockEnd
+        i32.ne
+        (br_if $rightBlockLoopY)
+      )
+    
+      local.get $x
+      i32.const 1
+      i32.add
+      local.tee $x
+      local.get $xBlockEnd
+      i32.ne
+      (br_if $rightBlockLoopX)
+    )
+
+    ;; draw bottom block
+    local.get $xStart
+    i32.const 3
+    i32.add
+    local.set $x
+
+    local.get $xStart
+    i32.const 6
+    i32.add
+    local.set $xBlockEnd
+
+    local.get $yStart
+    i32.const 5
+    i32.add
+    local.tee $y
+    local.set $yBlockStart
+
+    local.get $yStart
+    i32.const 7
+    i32.add
+    local.set $yBlockEnd
+
+    (loop $bottomBlockLoopX
+      local.get $yBlockStart
+      local.set $y
+      (loop $bottomBlockLoopY
+        local.get $x
+        local.get $y
+        local.get $bottomColor
+        call $putPixelAtXY
+
+        local.get $y
+        i32.const 1
+        i32.add
+        local.tee $y
+        local.get $yBlockEnd
+        i32.ne
+        (br_if $bottomBlockLoopY)
+      )
+    
+      local.get $x
+      i32.const 1
+      i32.add
+      local.tee $x
+      local.get $xBlockEnd
+      i32.ne
+      (br_if $bottomBlockLoopX)
+    )
+
+    ;; draw left block
+    local.get $xStart
+    i32.const 1
+    i32.add
+    local.set $x
+
+    local.get $xStart
+    i32.const 3
+    i32.add
+    local.set $xBlockEnd
+
+    local.get $yStart
+    i32.const 2
+    i32.add
+    local.tee $y
+    local.set $yBlockStart
+
+    local.get $yStart
+    i32.const 5
+    i32.add
+    local.set $yBlockEnd
+
+    (loop $leftBlockLoopX
+      local.get $yBlockStart
+      local.set $y
+      (loop $leftBlockLoopY
+        local.get $x
+        local.get $y
+        local.get $leftColor
+        call $putPixelAtXY
+
+        local.get $y
+        i32.const 1
+        i32.add
+        local.tee $y
+        local.get $yBlockEnd
+        i32.ne
+        (br_if $leftBlockLoopY)
+      )
+    
+      local.get $x
+      i32.const 1
+      i32.add
+      local.tee $x
+      local.get $xBlockEnd
+      i32.ne
+      (br_if $leftBlockLoopX)
+    )
     
   )
 
@@ -628,11 +919,34 @@
     global.set $snakePositionCounter
   )
 
+  (func $getSnakeHeadXY (result i32) (result i32)
+    (local $outX i32)
+    (local $outY i32)
+    global.get $snakePositionsByteOffset
+    i32.load
+    local.set $outX
+
+    global.get $snakePositionsByteOffset
+    i32.const 4
+    i32.add
+    i32.load
+    local.set $outY
+
+    local.get $outX
+    local.get $outY
+  )
+
   (func $moveSnake
     (local $headX i32)
     (local $headY i32)
     (local $newHeadX i32)
     (local $newHeadY i32)
+    (local $partX i32)
+    (local $partY i32)
+    (local $shiftIdx i32)
+    (local $shiftByteOffset i32)
+    (local $nextShiftIdx i32)
+    (local $nextShiftByteOffset i32)
 
     global.get $snakePositionsByteOffset
     i32.load
@@ -653,11 +967,8 @@
         i32.sub
         local.set $newHeadY
 
-        global.get $snakePositionsByteOffset
-        i32.const 4
-        i32.add
-        local.get $newHeadY
-        i32.store
+        local.get $headX
+        local.set $newHeadX
       )
     )
 
@@ -671,9 +982,8 @@
         i32.add
         local.set $newHeadX
 
-        global.get $snakePositionsByteOffset
-        local.get $newHeadX
-        i32.store
+        local.get $headY
+        local.set $newHeadY
       )
     )
 
@@ -687,11 +997,8 @@
         i32.add
         local.set $newHeadY
 
-        global.get $snakePositionsByteOffset
-        i32.const 4
-        i32.add
-        local.get $newHeadY
-        i32.store
+        local.get $headX
+        local.set $newHeadX
       )
     )
 
@@ -705,12 +1012,83 @@
         i32.sub
         local.set $newHeadX
 
-        global.get $snakePositionsByteOffset
-        local.get $newHeadX
-        i32.store
+        local.get $headY
+        local.set $newHeadY
       )
     )
 
+    ;; we have a new head XY for the snake
+    ;; we then added the new head to the beginning of the snake
+    ;; positions using unshift and remove the last element of the
+    ;; snake using pop
+    global.get $snakePositionCounter
+    local.tee $nextShiftIdx
+    i32.const 1
+    i32.sub
+    local.set $shiftIdx
+    
+
+    (loop $shiftSnakePositionsLoop
+
+      local.get $shiftIdx
+      i32.const 8
+      i32.mul
+      global.get $snakePositionsByteOffset
+      i32.add
+      i32.const 8
+      i32.add
+      local.set $nextShiftByteOffset
+
+      local.get $shiftIdx
+      i32.const 8
+      i32.mul
+      global.get $snakePositionsByteOffset
+      i32.add
+      local.tee $shiftByteOffset
+      i32.load
+      local.set $partX
+
+      local.get $shiftByteOffset
+      i32.const 4
+      i32.add
+      i32.load
+      local.set $partY
+
+      local.get $nextShiftByteOffset
+      local.get $partX
+      i32.store
+
+      local.get $nextShiftByteOffset
+      i32.const 4
+      i32.add
+      local.get $partY
+      i32.store
+
+      local.get $shiftIdx
+      local.tee $nextShiftIdx
+      i32.const 1
+      i32.sub
+      local.tee $shiftIdx
+
+
+      i32.const -1
+      i32.ne
+      (br_if $shiftSnakePositionsLoop)
+    )
+
+    local.get $nextShiftByteOffset
+    i32.const 8
+    i32.sub
+    local.get $newHeadX
+    i32.store
+
+    local.get $nextShiftByteOffset
+    i32.const 4
+    i32.sub
+    local.get $newHeadY
+    i32.store
+
+    
   )
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -720,26 +1098,39 @@
     call $moveSnake
 
     call $clearBackground
-    call $drawDebugGrid
+    ;; call $drawDebugGrid
     call $drawBorder
     call $drawScore
     call $drawSnake
+
+    i32.const 80
+    i32.const 80
+    call $drawFood
 
     global.get $score
     i32.const 1
     i32.add
     global.set $score
-  )
-  (func $main
-    i32.const 2
-    i32.const 24
-    i32.const 40
-    call $addSnakeBlock
+
+    global.get $frameCounter
+    i32.const 1
+    i32.add
+    global.set $frameCounter
 
     i32.const 1
-    i32.const 32
-    i32.const 40
+    call $getSnakeHeadXY
     call $addSnakeBlock
+  )
+  (func $main
+    ;; i32.const 2
+    ;; i32.const 24
+    ;; i32.const 40
+    ;; call $addSnakeBlock
+
+    ;; i32.const 1
+    ;; i32.const 32
+    ;; i32.const 40
+    ;; call $addSnakeBlock
 
     i32.const 0
     i32.const 40

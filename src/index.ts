@@ -18,6 +18,7 @@ const CANVAS_HEIGHT = 144;
 const FPS = 4;
 
 let snakeState: SnakeMoveState = 1;
+let canChangeSnakeState = true;
 
 // Init canvas
 const $glContiner = document.getElementById("gl-container")!;
@@ -148,6 +149,11 @@ document.body.addEventListener("keydown", (e) => {
 		default:
 			return;
 	}
+	if (!canChangeSnakeState) {
+		return;
+	}
+	canChangeSnakeState = false;
+
 	if (snakeState === 0 || snakeState === 2) {
 		if (newState === 1 || newState === 3) {
 			snakeState = newState;
@@ -189,4 +195,6 @@ function drawFrame() {
 		gl.UNSIGNED_SHORT,
 		0,
 	);
+
+	canChangeSnakeState = true;
 }
