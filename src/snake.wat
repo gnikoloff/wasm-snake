@@ -5,17 +5,17 @@
   ;;
   ;; Memory layout:
   ;;
-  ;; One virtual page in WASM is 64kb. We will need 3 pages to hold all of the data (pixel buffer + game state).
+  ;; One virtual page in WASM is 64kb. We will need 3 pages to hold all of the data (pixel buffer + characters + game state).
   ;; 64kb * 3 pages = 192kb = 196608 bytes for the entire program
-  ;;  _____________________________________________________________________________________________________________________________________
-  ;; | Offset:                                   |                                      |                                                 |
-  ;; | index 0                                   | index 37500                          | index 40000                                     |
-  ;; | byte index 0                              | byte index 150000                    | byte index 160000                               |
-  ;; |-------------------------------------------|--------------------------------------|-------------------------------------------------|
-  ;; | VRAM (pixel buffer contents)              | Char encodings (64 pixels per char)  | Snake parts positions (max 300)                 |
-  ;; | 256px width * 144 pxheight = 36864 pixels | Chars: 0123456789                    | Each position has 2 coords (XY)                 |
-  ;; | 4 bytes per pixel = 147456 bytes          | 64 * 10 chars * 4 bytes = 2560 bytes | 300 positions * 2 coords * 4 bytes = 2400 bytes |
-  ;; |___________________________________________|______________________________________|_________________________________________________|
+  ;;  ______________________________________________________________________________________________________________________________________
+  ;; | Offset:                                    |                                      |                                                 |
+  ;; | index 0                                    | index 37500                          | index 40000                                     |
+  ;; | byte index 0                               | byte index 150000                    | byte index 160000                               |
+  ;; |--------------------------------------------|--------------------------------------|-------------------------------------------------|
+  ;; | VRAM (pixel buffer contents)               | Char encodings (64 pixels per char)  | Snake parts positions (max 300)                 |
+  ;; | 256px width * 144 px height = 36864 pixels | Chars: 0123456789GAMEOVER            | Each position has 2 coords (XY)                 |
+  ;; | 4 bytes per pixel = 147456 bytes           | 64 * 18 chars * 4 bytes = 4608 bytes | 300 positions * 2 coords * 4 bytes = 2400 bytes |
+  ;; |____________________________________________|______________________________________|_________________________________________________|
   ;; 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   (memory 3)
@@ -25,6 +25,7 @@
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   (global $screenWidth i32 (i32.const 256))
   (global $screenHeight i32 (i32.const 144))
+  (global $gameGridHeight i32 (i32.const 128))
   (global $vramPixelCount i32 (i32.const 36864))        ;; screenWidth * screenHeight
 
   (global $topPadding i32 (i32.const 16))
@@ -45,13 +46,111 @@
   (global $frameCounter (mut i32) (i32.const 0))
   (global $foodColorState (mut i32) (i32.const 0))
 
+  (global $gameOverOffsetX (mut i32) (i32.const 0))
+  (global $gameOverOffsetY (mut i32) (i32.const 0))
+  (global $gameOverVelX (mut i32) (i32.const 5))
+  (global $gameOverVelY (mut i32) (i32.const 2))
+
+  (global $foodX (mut i32) (i32.const 0))
+  (global $foodY (mut i32) (i32.const 0))
+
+  (global $randomState (mut i64) (i64.const 0x853c49e6748fea9b))
+  (global $randomSequence (mut i64) (i64.const 0xda3e39cb94b95bdb))
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; exports (visible from JS)
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   (export "memory" (memory 0))
+  (export "start" (func $main))
   (export "updateFrame" (func $updateFrame))
   (export "setSnakeMovementState" (func $setSnakeMovementState))
   (export "setCharDataAtIdx" (func $setCharDataAtIdx))
+  (export "randomState" (global $randomState))
+  (export "randomSequence" (global $randomSequence))
+  (export "randomInt32" (func $random_int_32))
+
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; PCG-32 random number generator
+  ;; https://github.com/alisey/pcg32
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  (func $random_int_32 (result i32)
+    (local $old_state i64)
+
+    ;; uint64_t old_state = state;
+    ;; randomState = old_state * 6364136223846793005ULL + randomSequence;
+    (global.set $randomState
+      (i64.add
+        (i64.mul
+          (local.tee $old_state
+            (global.get $randomState)
+          )
+          (i64.const 0x5851f42d4c957f2d)
+        )
+        (global.get $randomSequence)
+      )
+    )
+
+    ;; return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
+    ;; Rotates `xorshifted` right by `rot` bits.
+    (i32.rotr
+      ;; uint32_t xorshifted = ((old_state >> 18u) ^ old_state) >> 27u;
+      (i32.wrap_i64
+        (i64.shr_u
+          (i64.xor
+            (i64.shr_u
+              (local.get $old_state)
+              (i64.const 18)
+            )
+            (local.get $old_state)
+          )
+          (i64.const 27)
+        )
+      )
+      ;; uint32_t rot = old_state >> 59u;
+      (i32.wrap_i64
+        (i64.shr_u
+          (local.get $old_state)
+          (i64.const 59)
+        )
+      )
+    )
+  )
+
+  (func $random_int (param $bound i32) (result i32)
+    (local $random    i32)
+    (local $threshold i32)
+
+    ;; uint32_t threshold = -bound % bound;
+    (local.set $threshold
+      (i32.rem_u
+        (i32.sub
+          (i32.const 0)
+          (local.get $bound)
+        )
+        (local.get $bound)
+      )
+    )
+
+    ;; for (;;) {
+    ;;     uint32_t random = pcg32_random();
+    ;;     if (random < threshold) continue;
+    ;;     break;
+    ;; }
+    (loop $try_random
+      (br_if $try_random
+          (i32.lt_u
+            (local.tee $random (call $random_int_32))
+            (local.get $threshold)
+          )
+      )
+    )
+
+    ;; return random % bound;
+    (i32.rem_u
+      (local.get $random)
+      (local.get $bound)
+    )
+  )
 
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; drawing utilities
@@ -878,6 +977,180 @@
     )
   )
 
+  (func $drawGameOver
+    (local $topLeftY i32)
+    (local $width i32)
+    (local $halfWidth i32)
+    (local $height i32)
+    (local $halfHeight i32)
+    (local $offsetX i32)
+
+    i32.const 86
+    local.set $width
+    i32.const 43
+    local.set $halfWidth
+
+    i32.const 8
+    local.set $height
+    i32.const 4
+    local.set $halfHeight
+
+    global.get $gameOverOffsetX
+    global.get $gameOverVelX
+    i32.add
+    global.set $gameOverOffsetX
+
+    global.get $gameOverOffsetY
+    global.get $gameOverVelY
+    i32.add
+    global.set $gameOverOffsetY
+
+    global.get $screenWidth
+    i32.const 2
+    i32.div_u
+    local.get $halfWidth
+    i32.sub
+    local.tee $offsetX
+    global.get $gameOverOffsetX
+    i32.add
+    local.set $offsetX
+
+    global.get $screenHeight
+    i32.const 2
+    i32.div_u
+    local.get $halfHeight
+    i32.sub
+    local.tee $topLeftY
+    global.get $gameOverOffsetY
+    i32.add
+    local.set $topLeftY
+
+    ;; check top boundary
+    local.get $topLeftY
+    global.get $topPadding
+    i32.le_u
+    (if
+      (then
+        i32.const -1
+        global.get $gameOverVelY
+        i32.mul
+        global.set $gameOverVelY
+      )
+    )
+
+    ;; check right boundary
+    local.get $offsetX
+    local.get $width
+    i32.add
+    global.get $screenWidth
+    i32.ge_u
+    (if
+      (then
+        i32.const -1
+        global.get $gameOverVelX
+        i32.mul
+        global.set $gameOverVelX
+      )
+    )
+
+    ;; check bottom boundary
+    local.get $topLeftY
+    local.get $height
+    i32.add
+    global.get $screenHeight
+    i32.ge_u
+    (if
+      (then
+        i32.const -1
+        global.get $gameOverVelY
+        i32.mul
+        global.set $gameOverVelY
+      )
+    )
+
+    ;; check left boundary
+    local.get $offsetX
+    i32.const 0
+    i32.le_u
+    (if
+      (then
+        i32.const -1
+        global.get $gameOverVelX
+        i32.mul
+        global.set $gameOverVelX
+      )
+    )
+
+    ;; G
+    i32.const 10
+    local.get $offsetX
+    local.get $topLeftY
+    call $drawChar
+    i32.const 10
+    local.get $offsetX
+    i32.add
+    local.set $offsetX
+    ;; A
+    i32.const 11
+    local.get $offsetX
+    local.get $topLeftY
+    call $drawChar
+    i32.const 10
+    local.get $offsetX
+    i32.add
+    local.set $offsetX
+    ;; M
+    i32.const 12
+    local.get $offsetX
+    local.get $topLeftY
+    call $drawChar
+    i32.const 10
+    local.get $offsetX
+    i32.add
+    local.set $offsetX
+    ;; E
+    i32.const 13
+    local.get $offsetX
+    local.get $topLeftY
+    call $drawChar
+    i32.const 18
+    local.get $offsetX
+    i32.add
+    local.set $offsetX
+    ;; O
+    i32.const 14
+    local.get $offsetX
+    local.get $topLeftY
+    call $drawChar
+    i32.const 10
+    local.get $offsetX
+    i32.add
+    local.set $offsetX
+    ;; V
+    i32.const 15
+    local.get $offsetX
+    local.get $topLeftY
+    call $drawChar
+    i32.const 10
+    local.get $offsetX
+    i32.add
+    local.set $offsetX
+    ;; E
+    i32.const 16
+    local.get $offsetX
+    local.get $topLeftY
+    call $drawChar
+    i32.const 10
+    local.get $offsetX
+    i32.add
+    local.set $offsetX
+    ;; R
+    i32.const 17
+    local.get $offsetX
+    local.get $topLeftY
+    call $drawChar
+  )
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; game helpers
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1027,7 +1300,6 @@
     i32.sub
     local.set $shiftIdx
     
-
     (loop $shiftSnakePositionsLoop
 
       local.get $shiftIdx
@@ -1091,6 +1363,28 @@
     
   )
 
+  (func $getRandomXYInGrid (result i32) (result i32)
+    (local $outX i32)
+
+    global.get $screenWidth
+    call $random_int
+    i32.const 8
+    i32.div_u
+    i32.const 8
+    i32.mul
+    local.set $outX
+
+    global.get $gameGridHeight
+    call $random_int
+    i32.const 8
+    i32.div_u
+    i32.const 8
+    i32.mul
+    global.get $topPadding
+    i32.add
+    local.get $outX
+  )
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Program start / update loop
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1098,13 +1392,15 @@
     call $moveSnake
 
     call $clearBackground
-    ;; call $drawDebugGrid
+    call $drawDebugGrid
     call $drawBorder
     call $drawScore
-    call $drawSnake
+    ;;call $drawSnake
 
-    i32.const 80
-    i32.const 80
+    call $drawGameOver
+
+    global.get $foodX
+    global.get $foodY
     call $drawFood
 
     global.get $score
@@ -1132,10 +1428,14 @@
     ;; i32.const 40
     ;; call $addSnakeBlock
 
+    call $getRandomXYInGrid
+    global.set $foodX
+    global.set $foodY
+
     i32.const 0
     i32.const 40
     i32.const 40
     call $addSnakeBlock
   )
-  (start $main)
+  
 )

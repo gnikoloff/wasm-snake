@@ -2,11 +2,19 @@ import snakeWasmURL from "./snake.wasm?url";
 import { createPlane, createProgram } from "./lib/hwoa-rang-gl2";
 import { CHAR_DATA } from "./constants";
 
+interface IWebAssemblyGlobalVar {
+	value: bigint;
+}
+
 interface IWebAssemblyExport {
 	memory: {
 		buffer: Int32Array;
 	};
+	randomSequence: IWebAssemblyGlobalVar;
+	randomState: IWebAssemblyGlobalVar;
+	start: () => void;
 	updateFrame: () => void;
+	randomInt32: () => void;
 	setSnakeMovementState: (state: SnakeMoveState) => void;
 	setCharDataAtIdx: (idx: number, color: number) => void;
 }
@@ -36,6 +44,7 @@ const { module, instance } = await WebAssembly.instantiateStreaming(
 	fetch(snakeWasmURL),
 	{},
 );
+console.log(instance.exports);
 const exports = instance.exports as unknown as IWebAssemblyExport;
 const memoryAsInt32 = new Int32Array(exports.memory.buffer);
 
@@ -45,7 +54,17 @@ for (let i = 0; i < CHAR_DATA.length; i++) {
 	}
 }
 
-console.log(memoryAsInt32);
+////////////////////////////////////////////////////////////////////////
+// Game helpers
+////////////////////////////////////////////////////////////////////////
+function seedRandomGenerator(
+	value = BigInt(Math.floor(Math.random() * 2 ** 53)),
+) {
+	exports.randomState.value = 0n;
+	exports.randomInt32();
+	exports.randomState.value += value;
+	exports.randomInt32();
+}
 
 ////////////////////////////////////////////////////////////////////////
 // WASM has internal blob of memory 192kb in size. It includes the pixel
@@ -127,6 +146,8 @@ gl.uniform1i(uTexture, 0);
 // Start game
 ////////////////////////////////////////////////////////////////////////
 exports.setSnakeMovementState(snakeState);
+seedRandomGenerator();
+exports.start();
 document.body.addEventListener("keydown", (e) => {
 	let newState: SnakeMoveState;
 	switch (e.key) {
