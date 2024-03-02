@@ -34,18 +34,17 @@
   (global $leftPadding i32 (i32.const 4))
   
   (global $snakeMoveState (mut i32) (i32.const 0))     ;; 0 - top ;; 1 - right ;; 2 - bottom ;; 3 - left ;;
-  (global $snakePositionCounter (mut i32) (i32.const 0))
-  (global $snakePositionsByteOffset i32 (i32.const 160000))
+  (global $snakePartsCounter (mut i32) (i32.const 0))
+  (global $snakePartsByteOffset i32 (i32.const 160000))
 
   (global $charsByteOffset i32 (i32.const 150000))
   (global $charWidth i32 (i32.const 8))
   (global $charPixelSize i32 (i32.const 64))
-  (global $charByteSize i32 (i32.const 256))
 
   (global $score (mut i32) (i32.const 0))
   (global $frameCounter (mut i32) (i32.const 0))
-  (global $foodColorState (mut i32) (i32.const 0))
 
+  (global $isGameOver (mut i32) (i32.const 0))
   (global $gameOverOffsetX (mut i32) (i32.const 0))
   (global $gameOverOffsetY (mut i32) (i32.const 0))
   (global $gameOverVelX (mut i32) (i32.const 5))
@@ -53,6 +52,7 @@
 
   (global $foodX (mut i32) (i32.const 0))
   (global $foodY (mut i32) (i32.const 0))
+  (global $foodColorState (mut i32) (i32.const 0))
 
   (global $randomState (mut i64) (i64.const 0x853c49e6748fea9b))
   (global $randomSequence (mut i64) (i64.const 0xda3e39cb94b95bdb))
@@ -638,7 +638,7 @@
     local.set $x
   )
 
-  (func $drawFood (param $x i32) (param $y i32)
+  (func $drawFood
     ;; (local $xBlockStart i32)
     (local $yBlockStart i32)
     (local $xBlockEnd i32)
@@ -649,6 +649,13 @@
     (local $rightColor i32)
     (local $bottomColor i32)
     (local $leftColor i32)
+    (local $x i32)
+    (local $y i32)
+
+    global.get $foodX
+    local.set $x
+    global.get $foodY
+    local.set $y
 
     global.get $frameCounter
     i32.const 5
@@ -950,7 +957,7 @@
       local.get $partIdx
       i32.const 8
       i32.mul
-      global.get $snakePositionsByteOffset
+      global.get $snakePartsByteOffset
       i32.add
       local.tee $partByteOffset
       i32.load
@@ -971,7 +978,7 @@
       i32.const 1
       i32.add
       local.tee $partIdx
-      global.get $snakePositionCounter
+      global.get $snakePartsCounter
       i32.ne
       (br_if $drawSnakeBlocksLoop)
     )
@@ -1174,7 +1181,7 @@
     local.get $idx
     i32.const 8
     i32.mul
-    global.get $snakePositionsByteOffset
+    global.get $snakePartsByteOffset
     i32.add
     local.tee $blockByteOffset
     local.get $x
@@ -1186,20 +1193,20 @@
     local.get $y
     i32.store ;; store y at idx + 1
 
-    global.get $snakePositionCounter
+    global.get $snakePartsCounter
     i32.const 1
     i32.add
-    global.set $snakePositionCounter
+    global.set $snakePartsCounter
   )
 
   (func $getSnakeHeadXY (result i32) (result i32)
     (local $outX i32)
     (local $outY i32)
-    global.get $snakePositionsByteOffset
+    global.get $snakePartsByteOffset
     i32.load
     local.set $outX
 
-    global.get $snakePositionsByteOffset
+    global.get $snakePartsByteOffset
     i32.const 4
     i32.add
     i32.load
@@ -1214,18 +1221,16 @@
     (local $headY i32)
     (local $newHeadX i32)
     (local $newHeadY i32)
+    (local $snakePartIdx i32)
     (local $partX i32)
     (local $partY i32)
-    (local $shiftIdx i32)
-    (local $shiftByteOffset i32)
-    (local $nextShiftIdx i32)
-    (local $nextShiftByteOffset i32)
+    (local $partByteOffset i32)
 
-    global.get $snakePositionsByteOffset
+    global.get $snakePartsByteOffset
     i32.load
     local.set $headX
 
-    global.get $snakePositionsByteOffset
+    global.get $snakePartsByteOffset
     i32.const 4
     i32.add
     i32.load
@@ -1289,78 +1294,116 @@
         local.set $newHeadY
       )
     )
-
+    
     ;; we have a new head XY for the snake
     ;; we then added the new head to the beginning of the snake
     ;; positions using unshift and remove the last element of the
     ;; snake using pop
-    global.get $snakePositionCounter
-    local.tee $nextShiftIdx
+
+    global.get $snakePartsCounter
     i32.const 1
     i32.sub
-    local.set $shiftIdx
-    
-    (loop $shiftSnakePositionsLoop
+    local.set $snakePartIdx
 
-      local.get $shiftIdx
+    ;; global.get $snakePartsByteOffset
+    (loop $shitSnakePartsLoop
+
+      ;; fetch current snake part xy
+
+      local.get $snakePartIdx
       i32.const 8
       i32.mul
-      global.get $snakePositionsByteOffset
-      i32.add
-      i32.const 8
-      i32.add
-      local.set $nextShiftByteOffset
-
-      local.get $shiftIdx
-      i32.const 8
-      i32.mul
-      global.get $snakePositionsByteOffset
-      i32.add
-      local.tee $shiftByteOffset
+      global.get $snakePartsByteOffset
+      i32.add ;; last position byte offset
+      local.tee $partByteOffset
+      
       i32.load
       local.set $partX
 
-      local.get $shiftByteOffset
+      local.get $partByteOffset
       i32.const 4
       i32.add
       i32.load
       local.set $partY
-
-      local.get $nextShiftByteOffset
+      
+      ;; shift snake part xy to next slot
+      local.get $partByteOffset
+      i32.const 8
+      i32.add
       local.get $partX
       i32.store
 
-      local.get $nextShiftByteOffset
-      i32.const 4
+      local.get $partByteOffset
+      i32.const 12
       i32.add
       local.get $partY
       i32.store
 
-      local.get $shiftIdx
-      local.tee $nextShiftIdx
+      local.get $snakePartIdx
       i32.const 1
       i32.sub
-      local.tee $shiftIdx
-
-
+      local.tee $snakePartIdx
       i32.const -1
       i32.ne
-      (br_if $shiftSnakePositionsLoop)
+      (br_if $shitSnakePartsLoop)
     )
 
-    local.get $nextShiftByteOffset
-    i32.const 8
-    i32.sub
+    global.get $snakePartsByteOffset
     local.get $newHeadX
     i32.store
 
-    local.get $nextShiftByteOffset
+    global.get $snakePartsByteOffset
     i32.const 4
-    i32.sub
+    i32.add
     local.get $newHeadY
     i32.store
 
+    ;; check if food has been eaten
+
+    global.get $foodX
+    local.get $headX
+    i32.eq
+    (if
+      (then
+        global.get $foodY
+        local.get $headY
+        i32.eq
+        (if
+          (then
+            ;; food has been eaten!
+            ;; 1. generate new food position
+            ;; 2. increase score
+            ;; 3. increase snake length
+
+            call $placeFoodRandom
+
+            global.get $snakePartsCounter
+            i32.const 1
+            i32.add
+            global.set $snakePartsCounter
+
+            global.get $score
+            i32.const 14
+            i32.add
+            global.set $score
+          )
+        )
+      )
+    )
+
+    ;; check if wall has been hit
+    local.get $newHeadX
     
+    global.get $screenWidth
+    
+    i32.ge_u
+    (if
+      (then
+        i32.const 1
+        global.set $isGameOver
+      )
+    )
+
   )
 
   (func $getRandomXYInGrid (result i32) (result i32)
@@ -1385,37 +1428,91 @@
     local.get $outX
   )
 
+  (func $placeFoodRandom
+    (local $foodRandomX i32)
+    (local $foodRandomY i32)
+    (local $snakePartIdx i32)
+    (local $snakePartByteOffset i32)
+    (local $newFoodPositionLiesOnSnake i32)
+
+    call $getRandomXYInGrid
+    local.set $foodRandomX
+    local.set $foodRandomY
+
+    global.get $snakePartsByteOffset
+    local.set $snakePartByteOffset
+
+    i32.const 0
+    local.set $snakePartIdx
+
+    (loop $checkIfFoodPositionLiesOnSnakeLoop
+
+      i32.const 8
+      local.get $snakePartIdx
+      i32.mul
+      global.get $snakePartsByteOffset
+      i32.add
+      local.tee $snakePartByteOffset
+      i32.load ;; snake part x
+      local.get $foodRandomX
+      i32.eq
+      (if
+        (then
+          local.get $snakePartByteOffset
+          i32.const 4
+          i32.add
+          i32.load ;; snake part y
+          local.get $foodRandomY
+          i32.eq
+          (if
+            (then
+              return
+            )
+          )
+        )
+      )
+
+      i32.const 1
+      local.get $snakePartIdx
+      i32.add
+      local.tee $snakePartIdx
+      global.get $snakePartsCounter
+      i32.eq
+      (br_if $checkIfFoodPositionLiesOnSnakeLoop)
+    )
+
+    local.get $foodRandomX
+    global.set $foodX
+    local.get $foodRandomY
+    global.set $foodY
+  )
+
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   ;; Program start / update loop
   ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   (func $updateFrame
-    call $moveSnake
 
     call $clearBackground
     call $drawDebugGrid
     call $drawBorder
     call $drawScore
-    ;;call $drawSnake
+    call $drawSnake
 
-    call $drawGameOver
-
-    global.get $foodX
-    global.get $foodY
-    call $drawFood
-
-    global.get $score
-    i32.const 1
-    i32.add
-    global.set $score
+    global.get $isGameOver
+    (if
+      (then
+        call $drawGameOver  
+      )
+      (else
+        call $moveSnake
+        call $drawFood
+      )
+    )
 
     global.get $frameCounter
     i32.const 1
     i32.add
     global.set $frameCounter
-
-    i32.const 1
-    call $getSnakeHeadXY
-    call $addSnakeBlock
   )
   (func $main
     ;; i32.const 2
@@ -1428,12 +1525,24 @@
     ;; i32.const 40
     ;; call $addSnakeBlock
 
-    call $getRandomXYInGrid
+    ;; call $getRandomXYInGrid
+    i32.const 40
     global.set $foodX
+    i32.const 40
     global.set $foodY
 
     i32.const 0
     i32.const 40
+    i32.const 40
+    call $addSnakeBlock
+
+    i32.const 1
+    i32.const 48
+    i32.const 40
+    call $addSnakeBlock
+
+    i32.const 2
+    i32.const 56
     i32.const 40
     call $addSnakeBlock
   )

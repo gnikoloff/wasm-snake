@@ -23,7 +23,7 @@ type SnakeMoveState = 0 | 1 | 2 | 3; // 0 - Up // 1 - Right // 2 - Bottom // 3 -
 
 const CANVAS_WIDTH = 256;
 const CANVAS_HEIGHT = 144;
-const FPS = 4;
+const FPS = 10;
 
 let snakeState: SnakeMoveState = 1;
 let canChangeSnakeState = true;
