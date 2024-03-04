@@ -273,82 +273,22 @@
     i32.eq
     (if
       (then
-
-        global.get $snakeMoveState
-        i32.eqz ;; up
-        (if
-          (then
-            local.get $xStart
-            i32.const 3
-            i32.add
-            local.set $eyeX
-
-            local.get $yStart
-            i32.const 3
-            i32.add
-            local.set $eyeY
-          )
-        )
-
-        global.get $snakeMoveState
-        i32.const 1
-        i32.eq ;; right
-        (if
-          (then
-            local.get $xStart
-            i32.const 6
-            i32.add
-            local.set $eyeX
-
-            local.get $yStart
-            i32.const 3
-            i32.add
-            local.set $eyeY
-          )
-        )
-
-        global.get $snakeMoveState
-        i32.const 2
-        i32.eq ;; bottom
-        (if
-          (then
-            local.get $xStart
-            i32.const 3
-            i32.add
-            local.set $eyeX
-
-            local.get $yStart
-            i32.const 6
-            i32.add
-            local.set $eyeY
-          )
-        )
-
-        global.get $snakeMoveState
+        local.get $xStart
         i32.const 3
-        i32.eq ;; left
-        (if
-          (then
-            local.get $xStart
-            i32.const 3
-            i32.add
-            local.set $eyeX
+        i32.add
+        local.set $eyeX
 
-            local.get $yStart
-            i32.const 3
-            i32.add
-            local.set $eyeY
-          )
-        )
-
-        
+        local.get $yStart
+        i32.const 3
+        i32.add
+        local.set $eyeY
 
         local.get $eyeX
         local.get $eyeY
         i32.const 0
         call $putPixelAtXY
       )
-    )
+    )        
   )
 
   (func $drawChar (param $charIdx i32) (param $offsetX i32) (param $offsetY i32) (param $color i32)
