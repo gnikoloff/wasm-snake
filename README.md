@@ -4,12 +4,19 @@
 
 Snake written in WebAssembly Text (WAT) format and compiled to WASM bytecode.
 
-All graphics, game state and logic are written in WAT.
-Module is loaded in JS (host environment) which is responsible for game tick, user input and random number generator seeding.
+All of the game graphics, state and logic are written in WebAssembly Text. The host environment (Javascript) is responsible for:
 
-The WASM memory consists of 3 virtual pages (64kb each) = 192kb total. Within those exist the pixel buffer, the snake and food positions and the character data. The memory is shared with JS, which then blits it to the screen using WebGL2.
+Game tick loop
 
-You can refer to [src/snake.wat](https://github.com/gnikoloff/wasm-snake/blob/main/src/snake.wat) for detailed memory break down and lots of comments.
+User input
+
+Providing characters "0123456789GAMEOVER" byte data on game startup
+
+Blitting the pixel buffer to the display with WebGL2
+
+The game uses 3 virtual pages of memory (64kb each) for a total of 192kb. Within those exist the pixel buffer contents, the characters data and snake positions. For more detailed breakdown you can check [src/snake.wat](https://github.com/gnikoloff/wasm-snake/blob/main/src/snake.wat).
+
+The memory is shared between WASM and JS. On each game tick, the pixel buffer region of the memory is transferred to a WebGL2 texture, uploaded to the GPU and blitted to the screen.
 
 ### References and readings
 
