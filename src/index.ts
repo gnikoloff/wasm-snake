@@ -172,10 +172,12 @@ exports.setSnakeMovementState(snakeState);
 seedRandomGenerator();
 exports.start();
 $mobileButtonsContainer.addEventListener("click", (e) => {
+	e.preventDefault();
 	const target = e.target as HTMLElement;
 	if (target.nodeName === "BUTTON") {
 		const btnAction = target.dataset.action;
 		if (btnAction === "refresh") {
+			changeDifficulty(2);
 			exports.refreshGame();
 		}
 	}
@@ -199,7 +201,7 @@ $mobileButtonsContainer.addEventListener("click", (e) => {
 				newState = 3;
 				break;
 			default:
-				newState = 1;
+				return;
 		}
 		if (!canChangeSnakeState) {
 			return;

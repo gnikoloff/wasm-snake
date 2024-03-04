@@ -1161,9 +1161,12 @@
   )
 
   (func $refreshGame
+    (local $partIdx i32)
+    (local $partByteOffset i32)
+
     i32.const 0
     global.set $snakePartsCounter
-
+    
     i32.const 2
     i32.const 26
     i32.const 40
