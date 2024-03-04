@@ -1164,8 +1164,8 @@
     i32.const 0
     global.set $snakePartsCounter
 
-    i32.const 0
-    i32.const 40
+    i32.const 2
+    i32.const 26
     i32.const 40
     call $addSnakeBlock
 
@@ -1174,10 +1174,11 @@
     i32.const 40
     call $addSnakeBlock
 
-    i32.const 2
-    i32.const 26
+    i32.const 0
+    i32.const 40
     i32.const 40
     call $addSnakeBlock
+
 
     call $placeFoodRandom
 
