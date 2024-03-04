@@ -15,18 +15,29 @@ interface IWebAssemblyExport {
 	start: () => void;
 	updateFrame: () => void;
 	randomInt32: () => void;
+	setDifficulty: (difficulty: Difficulty) => void;
 	setSnakeMovementState: (state: SnakeMoveState) => void;
 	setCharDataAtIdx: (idx: number, color: number) => void;
+	refreshGame: () => void;
 }
 
 type SnakeMoveState = 0 | 1 | 2 | 3; // 0 - Up // 1 - Right // 2 - Bottom // 3 - Left
 
+type Difficulty = 1 | 2 | 3; // 0 - Hard // 1 - Normal // 2 - Easy
+
 const CANVAS_WIDTH = 256;
 const CANVAS_HEIGHT = 144;
-const FPS = 10;
+const FPS_HARD = 20;
+const FPS_NORMAL = 10;
+const FPS_EASY = 5;
+let gameTickInterval: number;
 
 let snakeState: SnakeMoveState = 1;
 let canChangeSnakeState = true;
+
+const $mobileButtonsContainer = document.getElementById(
+	"mobile-arrow-buttons",
+)!;
 
 // Init canvas
 const $glContiner = document.getElementById("gl-container")!;
@@ -42,7 +53,19 @@ $glContiner.appendChild($c);
 ////////////////////////////////////////////////////////////////////////
 const { module, instance } = await WebAssembly.instantiateStreaming(
 	fetch(snakeWasmURL),
-	{},
+	{
+		game: {
+			onGameOver: () => {
+				const $refreshIcon = document.getElementById("refresh-icon")!;
+				$refreshIcon.classList.add("rotate");
+				$refreshIcon.addEventListener("transitionend", () => {
+					setTimeout(() => {
+						$refreshIcon.classList.remove("rotate");
+					}, 200);
+				});
+			},
+		},
+	},
 );
 console.log(instance.exports);
 const exports = instance.exports as unknown as IWebAssemblyExport;
@@ -148,8 +171,76 @@ gl.uniform1i(uTexture, 0);
 exports.setSnakeMovementState(snakeState);
 seedRandomGenerator();
 exports.start();
+$mobileButtonsContainer.addEventListener("click", (e) => {
+	const target = e.target as HTMLElement;
+	if (target.nodeName === "BUTTON") {
+		const btnAction = target.dataset.action;
+		if (btnAction === "refresh") {
+			exports.refreshGame();
+		}
+	}
+});
+$mobileButtonsContainer.addEventListener("click", (e) => {
+	const target = e.target as HTMLElement;
+	if (target.nodeName === "BUTTON") {
+		const btnAction = target.dataset.action;
+		let newState!: SnakeMoveState;
+		switch (btnAction) {
+			case "up":
+				newState = 0;
+				break;
+			case "right":
+				newState = 1;
+				break;
+			case "down":
+				newState = 2;
+				break;
+			case "left":
+				newState = 3;
+				break;
+			default:
+				newState = 1;
+		}
+		if (!canChangeSnakeState) {
+			return;
+		}
+		canChangeSnakeState = false;
+
+		if (snakeState === 0 || snakeState === 2) {
+			if (newState === 1 || newState === 3) {
+				snakeState = newState;
+			}
+		}
+		if (snakeState === 1 || snakeState === 3) {
+			if (newState === 0 || newState === 2) {
+				snakeState = newState;
+			}
+		}
+		exports.setSnakeMovementState(snakeState);
+	}
+});
 document.body.addEventListener("keydown", (e) => {
 	let newState: SnakeMoveState;
+	switch (e.key) {
+		case "1":
+			e.preventDefault();
+			changeDifficulty(1);
+			break;
+		case "2":
+			e.preventDefault();
+			changeDifficulty(2);
+			break;
+		case "3":
+			e.preventDefault();
+			changeDifficulty(3);
+			break;
+		case "R":
+		case "r":
+			e.preventDefault();
+			changeDifficulty(2);
+			exports.refreshGame();
+			break;
+	}
 	switch (e.key) {
 		case "ArrowUp":
 			e.preventDefault();
@@ -188,7 +279,21 @@ document.body.addEventListener("keydown", (e) => {
 	exports.setSnakeMovementState(snakeState);
 });
 
-setInterval(drawFrame, 1000 / FPS);
+gameTickInterval = setInterval(drawFrame, 1000 / FPS_NORMAL);
+
+function changeDifficulty(difficulty: Difficulty) {
+	if (difficulty === 1) {
+		clearInterval(gameTickInterval);
+		gameTickInterval = setInterval(drawFrame, 1000 / FPS_HARD);
+	} else if (difficulty === 2) {
+		clearInterval(gameTickInterval);
+		gameTickInterval = setInterval(drawFrame, 1000 / FPS_NORMAL);
+	} else if (difficulty === 3) {
+		clearInterval(gameTickInterval);
+		gameTickInterval = setInterval(drawFrame, 1000 / FPS_EASY);
+	}
+	exports.setDifficulty(difficulty);
+}
 
 function drawFrame() {
 	// Update WASM pixel contents memory
