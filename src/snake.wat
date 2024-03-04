@@ -1179,7 +1179,6 @@
     i32.const 40
     call $addSnakeBlock
 
-
     call $placeFoodRandom
 
     i32.const 0
@@ -1425,6 +1424,8 @@
       local.get $snakePartIdx
       i32.mul
       global.get $snakePartsByteOffset
+      i32.add
+      i32.const 8
       i32.add
       local.tee $partByteOffset
       i32.load
